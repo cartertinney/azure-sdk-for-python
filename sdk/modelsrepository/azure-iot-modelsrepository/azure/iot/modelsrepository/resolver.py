@@ -54,15 +54,26 @@ def resolve(dtmi, endpoint, resolve_dependencies=DEPENDENCY_MODE_DISABLED):
     model_map = {}
     # If using expanded DTDL, add an entry to the model map for each model
     if resolve_dependencies == DEPENDENCY_MODE_TRY_FROM_EXPANDED:
+        _add_models_from_expanded_dtdl_to_map(dtdl, model_map)
+        # All dependencies SHOULD be included in the expanded document, but just in case, check
+        # and manually resolve any missing ones
         for model in dtdl:
-            model_map[model["@id"]] = model
-    # If resolving dependencies, will need to fetch component models
-    # NOTE: This (should) be unnecessary if using expanded DTDL because
-    # expanded DTDL (should) already have all dependencies
+            _resolve_model_dependencies(
+                model=model,
+                endpoint=endpoint,
+                model_map=model_map,
+                mode=resolve_dependencies
+            )
+    # If resolving dependencies, will need to manually fetch component models
     elif resolve_dependencies == DEPENDENCY_MODE_ENABLED:
         model = dtdl
         model_map[dtmi] = model
-        _resolve_model_dependencies(model=model, endpoint=endpoint, model_map=model_map, mode=resolve_dependencies)
+        _resolve_model_dependencies(
+            model=model,
+            endpoint=endpoint,
+            model_map=model_map,
+            mode=resolve_dependencies
+        )
     # Otherwise, just return a one-entry map of the returned DTDL (single model)
     else:
         model = dtdl
@@ -97,6 +108,46 @@ def _resolve_model_dependencies(model, endpoint, model_map, mode):
     """Retrieve all components and extended interface dependencies in the provided model from the provided
     endpoint, and add them to the provided model map.
     This recursively operates on the retrieved dependencies as well"""
+    dependencies = _get_model_dependencies(model)
+    for dependency_dtmi in dependencies:
+        if dependency_dtmi not in model_map:
+            fq_dependency_dtmi = get_fully_qualified_dtmi(dependency_dtmi, endpoint)
+            if mode == DEPENDENCY_MODE_TRY_FROM_EXPANDED:
+                fully_qualified_dtmi = fully_qualified_dtmi.replace(".json", ".expanded.json")
+                # The fetched DTDL will be a list of models
+                dependency_dtdl = _fetch_dtdl(fq_dependency_dtmi)
+                _add_models_from_expanded_dtdl_to_map(dependency_dtdl, model_map)
+                # All dependencies should have been included in the DTDL, but just in case, check
+                # and manually fetch anything that's missing
+                for dependency_model in dependency_dtdl:
+                    _resolve_model_dependencies(
+                        model=dependency_model,
+                        endpoint=endpoint,
+                        model_map=model_map,
+                        mode=mode
+                    )
+            else:
+                # The fetched DTDL will be a single model
+                dependency_model = _fetch_dtdl(fq_dependency_dtmi)
+                model_map[dependency_dtmi] = dependency_model
+                _resolve_model_dependencies(
+                    model=dependency_model,
+                    endpoint=endpoint,
+                    model_map=model_map,
+                    mode=mode
+                )
+
+
+def _add_models_from_expanded_dtdl_to_map(dtdl, model_map):
+    """Add models from an expanded DTDL to a provided dictionary, if they are not already in it"""
+    for model in dtdl:
+        dtmi = model["@id"]
+        if dtmi not in model_map:
+            model_map[model["@id"]] = model
+
+
+def _get_model_dependencies(model):
+    """Return a list of DTMIs that are dependencies of the provided model"""
     if "contents" in model:
         components = [item["schema"] for item in model["contents"] if item["@type"] == "Component"]
     else:
@@ -112,15 +163,7 @@ def _resolve_model_dependencies(model, endpoint, model_map, mode):
         interfaces = []
 
     dependencies = components + interfaces
-    for dependency_dtmi in dependencies:
-        if dependency_dtmi not in model_map:
-            fq_dependency_dtmi = get_fully_qualified_dtmi(dependency_dtmi, endpoint)
-            if mode == DEPENDENCY_MODE_TRY_FROM_EXPANDED:
-                fully_qualified_dtmi = fully_qualified_dtmi.replace(".json", ".expanded.json")
-            # The fetched DTDL will be a single model
-            dependency_model = _fetch_dtdl(fq_dependency_dtmi)
-            model_map[dependency_dtmi] = dependency_model
-            _resolve_model_dependencies(model=dependency_model, endpoint=endpoint, model_map=model_map, mode=mode)
+    return dependencies
 
 
 def _fetch_dtdl(resource_location):
