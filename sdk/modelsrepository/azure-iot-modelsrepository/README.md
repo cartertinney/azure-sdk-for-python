@@ -34,29 +34,28 @@ The repository defines a pattern to store DTDL interfaces in a directory structu
 ## Examples
 The following sections provide several snippets covering common Models Repository tasks:
 * [Initializing the ModelsRepositoryClient](#initializing-the-modelsrepositoryclient, "Initializing the ModelsRepositoryClient")
-* [Get Models](#get-models, "Get models")
+* [Get Models](#modelsrepositoryclient---get-models, "Get models")
 * [DTMI Conventions](#dtmi-conventions, "DTMI Conventions")
 
 ### Initializing the ModelsRepositoryClient
-When no repsository location is provided during instantiation, the Azure IoT Models Repository global endpoint (https://devicemodels.azure.com/) is used
+
+#### Repository Location
+When no repository location is provided during instantiation, the Azure IoT Models Repository global endpoint (https://devicemodels.azure.com/) is used
 
 ```python
 client = ModelsRepositoryClient()
 ```
 
-Alternatively, you can provide a custom URL where your repository is located
-
+Alternatively, you can provide a custom location for where your repository is located via the optional `repository_location` keyword. The client accepts the following location formats:
+* Web URL - e.g. `"https://contoso.com/models/"`
+* Local Filesystem URI - e.g. `"file:///path/to/repository/"`
+* POSIX filepath - e.g. `"/path/to/repository/"`
+* Drive letter filepath - e.g. `"C:/path/to/repository/"`
 ```python
-client = ModelsRepositoryClient(repository_location="https://fake.myrepository.com/")
+client = ModelsRepositoryClient(repository_location="https://contoso.com/models/")
 ```
 
-The client will also work with a local filesystem path if your repository is set up locally
-
-```python
-client = ModelsRepositoryClient(repository_location="file:///home/fake/myrepository")
-```
-
-#### Additional options
+#### Dependency Resolution Mode
 The client can be configured with an optional `dependency_resolution` mode at instantiation, using one of the following values:
 * `'disabled'` - The client will not resolve model dependencies
 * `'enabled'` - The client will resolve any model dependencies
@@ -70,6 +69,7 @@ If the `dependency_resolution` mode is not specified:
 * Clients configured for the Azure IoT Models Repository global endpoint will default to using `'tryFromExpanded'`
 * Clients configured for a custom location (remote or local) will default to using `'enabled'`
 
+#### Additional Options
 If you need to override default pipeline behavior from the [azure-core library][azure_core_docs], you can provide various [keyword arguments][azure_core_kwargs] during instantiation.
 
 #### Client cleanup
@@ -107,7 +107,7 @@ with ModelsRepositoryClient() as client:
 print("{} resolved in {} interfaces".format(dtmi, len(models)))
 ```
 
-By default the client will use whichever [dependency resolution mode](#additional-options, "Dependency resolution mode") it was configured with at instantiation when retreiving models. However, this behaviour can be overridden by passing any of the valid options in as an optional keyword argument to `.get_models()`
+By default the client will use whichever [dependency resolution mode](#dependency-resolution-mode, "Dependency resolution mode") it was configured with at instantiation when retrieving models. However, this behavior can be overridden by passing any of the valid options in as an optional keyword argument to `.get_models()`
 
 ```python
 dtmi = "dtmi:com:example:TemperatureController;1"
@@ -147,23 +147,14 @@ print(dtmi_conventions.get_model_uri(dtmi, repo_uri, expanded=True))
 
 ## Troubleshooting
 
-### General
-Models Repository clients raise exceptions defined in [azure-core][azure_core_exceptions].
-
 ### Logging
 This library uses the standard [logging][logging_doc] library for logging. Information about HTTP sessions (URLs, headers, etc.) is logged at `DEBUG` level.
 
 ### Exceptions
-Models Repository APIs may generate the following exceptions from the following packages:
+Models Repository APIs may raise exceptions defined in [azure-core][azure_core_exceptions].
 
-#### azure.iot.modelsrepository
-* `ModelError` - Indicates an error occured while trying to parse/resolve a model definition. This generally means that there is a malformed model that does not comply with the [model DTDL specification][dtdl_spec]
-
-#### azure.core.exceptions
-* `ResourceNotFoundError` - Indicates a model could not be found in the repository
-* `ServiceRequestError` - Indicates there was an error in making a request to the repository for a model
-* `ServiceResponseError` - Indicates that a request to the repository could not be completed
-* `HttpResponseError` - Indicates that an unexpected failure response was received from the service 
+Additionally, they may raise exceptions defined in the `azure-iot-modelsrepository`:
+* `ModelError` - Indicates an error occurred while trying to parse/resolve a model definition. This generally means that there is a malformed model that does not comply with the [model DTDL specification][dtdl_spec]
 
 ### Provide Feedback
 If you encounter bugs or have suggestions, please
